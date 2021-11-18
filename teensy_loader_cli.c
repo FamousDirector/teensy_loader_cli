@@ -256,6 +256,13 @@ usb_dev_handle * open_usb_device(int vid, int pid, int d_index)
 				printf_verbose("Found device but unable to open\n");
 				continue;
 			}
+
+            // ensure index of usb device is chosen
+            if (di++ < d_index) {
+                usb_close(h);
+                continue;
+            };
+
 			#ifdef LIBUSB_HAS_GET_DRIVER_NP
 			r = usb_get_driver_np(h, 0, buf, sizeof(buf));
 			if (r >= 0) {
@@ -278,11 +285,6 @@ usb_dev_handle * open_usb_device(int vid, int pid, int d_index)
 				continue;
 			}
 			#endif
-
-            if (di++ < d_index) {
-                usb_close(h);
-                continue;
-            };
 
 			return h;
 		}
