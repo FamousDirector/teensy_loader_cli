@@ -43,6 +43,7 @@ void usage(const char *err)
 		"\t-s : Use soft reboot if device not online (Teensy 3.x & 4.x)\n"
 		"\t-n : No reboot after programming\n"
 		"\t-b : Boot only, do not program\n"
+        "\t-2 : Select second available teensy (linux only)\n"
 		"\t-v : Verbose output\n"
 		"\nUse `teensy_loader_cli --list-mcus` to list supported MCUs.\n"
 		"\nFor more information, please visit:\n"
@@ -78,6 +79,7 @@ int reboot_after_programming = 1;
 int verbose = 0;
 int boot_only = 0;
 int code_size = 0, block_size = 0;
+int device_index = 0;
 const char *filename=NULL;
 
 
@@ -227,13 +229,14 @@ int main(int argc, char **argv)
 // http://libusb.sourceforge.net/doc/index.html
 #include <usb.h>
 
-usb_dev_handle * open_usb_device(int vid, int pid)
+usb_dev_handle * open_usb_device(int vid, int pid, int d_index)
 {
 	struct usb_bus *bus;
 	struct usb_device *dev;
 	usb_dev_handle *h;
 	char buf[128];
 	int r;
+    int di = 0;
 
 	usb_init();
 	usb_find_busses();
@@ -276,6 +279,11 @@ usb_dev_handle * open_usb_device(int vid, int pid)
 			}
 			#endif
 
+            if (di++ < d_index) {
+                usb_close(h);
+                continue;
+            };
+
 			return h;
 		}
 	}
@@ -287,7 +295,7 @@ static usb_dev_handle *libusb_teensy_handle = NULL;
 int teensy_open(void)
 {
 	teensy_close();
-	libusb_teensy_handle = open_usb_device(0x16C0, 0x0478);
+	libusb_teensy_handle = open_usb_device(0x16C0, 0x0478, 0);
 	if (libusb_teensy_handle) return 1;
 	return 0;
 }
@@ -321,7 +329,7 @@ int hard_reboot(void)
 	usb_dev_handle *rebootor;
 	int r;
 
-	rebootor = open_usb_device(0x16C0, 0x0477);
+	rebootor = open_usb_device(0x16C0, 0x0477, device_index);
 	if (!rebootor) return 0;
 	r = usb_control_msg(rebootor, 0x21, 9, 0x0200, 0, "reboot", 6, 100);
 	usb_release_interface(rebootor, 0);
@@ -334,7 +342,7 @@ int soft_reboot(void)
 {
 	usb_dev_handle *serial_handle = NULL;
 
-	serial_handle = open_usb_device(0x16C0, 0x0483);
+	serial_handle = open_usb_device(0x16C0, 0x0483, device_index);
 	if (!serial_handle) {
 		char *error = usb_strerror();
 		printf("Error opening USB device: %s\n", error);
@@ -1131,6 +1139,9 @@ void parse_flag(char *arg)
 			case 'n': reboot_after_programming = 0; break;
 			case 'v': verbose = 1; break;
 			case 'b': boot_only = 1; break;
+            case '1': device_index = 0; break;
+            case '2': device_index = 1; break;
+            case '3': device_index = 2; break;
 			default:
 				fprintf(stderr, "Unknown flag '%c'\n\n", arg[i]);
 				usage(NULL);
